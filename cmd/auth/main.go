@@ -1,17 +1,17 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/twitch"
-
-	_ "github.com/joho/godotenv/autoload"
 )
 
 var (
@@ -22,30 +22,27 @@ var (
 		RedirectURL:  "http://localhost:8000/callback",
 		Scopes:       []string{"channel:manage:broadcast", "moderation:read", "channel:moderate", "chat:edit"},
 	}
-	randomState = "random string state"
+	googleOauthConfig = oauth2.Config{
+		ClientID:     os.Getenv("GKEY"),
+		ClientSecret: os.Getenv("GSECRET"),
+		Endpoint:     twitch.Endpoint,
+		RedirectURL:  "http://localhost:8000/callback",
+		Scopes:       []string{"https://www.googleapis.com/auth/youtube", "https://www.googleapis.com/auth/tasks", "https://www.googleapis.com/auth/calendar", ""},
+	}
+	randomState = "Monkey Dragon Kiwi Japan Corn bath Jupiter"
 	cmd         string
 	name        string
+	rs          = base64.StdEncoding.EncodeToString([]byte(randomState))
 )
 
 type TokenJson struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	TokenType    string `json:"token_type"`
-	Expiry       string `json:"expiry"`
+	Name         string    `json:"name"`
+	AccessToken  string    `json:"access_token"`
+	RefreshToken string    `json:"refresh_token"`
+	TokenType    string    `json:"token_type"`
+	Expiry       time.Time `json:"expiry"`
 }
-type Provider struct {
-	Name      string `json:"name"`
-	TokenInfo oauth2.Token
-}
-type Config map[string]*App
-
-type App struct {
-	Name      string
-	AuthState string
-	AuthCode  string
-	oauth2.Config
-	oauth2.Token
-}
+type Config map[string]*TokenJson
 
 func main() {
 
@@ -74,13 +71,13 @@ func getToken(name string) {
 		fmt.Println("File reading error", err)
 		return
 	}
-	var jsonData Provider
+	var jsonData TokenJson
 
 	err = json.Unmarshal(data, &jsonData)
 	if err != nil {
 		fmt.Print("Error unmarshal json", err.Error())
 	}
-	token := jsonData.TokenInfo.AccessToken
+	token := jsonData.AccessToken
 	fmt.Println(token)
 	return
 }
@@ -94,11 +91,11 @@ func handleHome(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, html)
 }
 func handleLogIn(w http.ResponseWriter, r *http.Request) {
-	url := twitchOauthConfig.AuthCodeURL(randomState)
+	url := twitchOauthConfig.AuthCodeURL(rs)
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
 func handleCallback(w http.ResponseWriter, r *http.Request) {
-	if r.FormValue("state") != randomState {
+	if r.FormValue("state") != rs {
 		fmt.Println("state is not valid")
 		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 		return
@@ -110,15 +107,23 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 
 	}
-	rawData := Provider{Name: "twitch", TokenInfo: *token}
+	var rawData TokenJson
+	rawData = addName(rawData, name, token)
 	file, _ := json.MarshalIndent(rawData, "", " ")
 
 	_ = ioutil.WriteFile(ConfigFilePath(), file, 0644)
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(token.AccessToken)
 	os.Exit(0)
+}
+func addName(t TokenJson, n string, o *oauth2.Token) TokenJson {
+	t.AccessToken = o.AccessToken
+	t.Expiry = o.Expiry
+	t.RefreshToken = o.RefreshToken
+	t.TokenType = o.TokenType
+	t.Name = n
+	return t
 }
 func ConfigFilePath() string {
 	file := os.Getenv("AUTHCONF")
