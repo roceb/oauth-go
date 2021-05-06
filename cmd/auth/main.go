@@ -108,7 +108,7 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 
 	}
 	var rawData TokenJson
-	rawData = addName(rawData, name, token)
+	rawData = joinJson(rawData, name, token)
 	file, _ := json.MarshalIndent(rawData, "", " ")
 
 	_ = ioutil.WriteFile(ConfigFilePath(), file, 0644)
@@ -117,7 +117,7 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	os.Exit(0)
 }
-func addName(t TokenJson, n string, o *oauth2.Token) TokenJson {
+func joinJson(t TokenJson, n string, o *oauth2.Token) TokenJson {
 	t.AccessToken = o.AccessToken
 	t.Expiry = o.Expiry
 	t.RefreshToken = o.RefreshToken
